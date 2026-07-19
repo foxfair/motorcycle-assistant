@@ -2,6 +2,7 @@ import 'dart:ffi';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:drift/native.dart';
 import 'package:sqlite3/open.dart';
 import 'package:motorcycle_assistant/main.dart';
@@ -94,6 +95,7 @@ void main() {
     // Verify dashboard displays initial/empty stats
     expect(find.text('0 mi'), findsOneWidget); // Initial mileage
     expect(find.textContaining('No fuel logs recorded yet'), findsOneWidget);
+    expect(find.byType(LineChart), findsNothing); // No chart should be rendered
     expect(find.textContaining('Never recorded'), findsAtLeastNWidgets(2)); // Default tasks status (Oil, Chain, etc.)
 
     // Verify Vehicle Information card is displayed
@@ -181,6 +183,10 @@ void main() {
     expect(find.text('50.0 MPG'), findsNWidgets(2));
     expect(find.text('\$42.00'), findsOneWidget);
     expect(find.text('\$0.093/mi'), findsOneWidget);
+    
+    // Verify chart is now rendered in MPG
+    expect(find.text('Economy Trend (MPG)'), findsOneWidget);
+    expect(find.byType(LineChart), findsOneWidget);
 
     // Verify Oil Change reminder is updated to "Due at 5000 mi" (1000 last done + 4000 interval)
     expect(find.textContaining('Due at 5000 mi'), findsOneWidget);
@@ -319,6 +325,10 @@ void main() {
     // Cost per Mile: $0.01387/mi -> Cost per Km: $0.01387 / 1.60934 = $0.009/km (approx)
     expect(find.text('\$0.009/km'), findsOneWidget);
     expect(find.text('Cost per Km'), findsOneWidget);
+
+    // Verify chart is rendered in km/L
+    expect(find.text('Economy Trend (km/L)'), findsOneWidget);
+    expect(find.byType(LineChart), findsOneWidget);
 
     // Verify Maintenance Reminder shows converted due status:
     // "Due in 300 mi" * 1.60934 = 483 km (rounded)

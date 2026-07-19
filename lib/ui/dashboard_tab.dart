@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../database/database.dart';
 import '../providers.dart';
 import '../services/maintenance_reminder.dart';
@@ -16,6 +17,7 @@ class DashboardTab extends ConsumerWidget {
     final fuelStats = ref.watch(fuelStatsProvider(motorcycle.id));
     final reminders = ref.watch(remindersProvider(motorcycle.id));
     final settings = ref.watch(settingsProvider);
+    final chartPoints = ref.watch(fuelChartPointsProvider(motorcycle.id));
 
     return Scaffold(
       body: RefreshIndicator(
@@ -160,6 +162,21 @@ class DashboardTab extends ConsumerWidget {
                                   ),
                                 ],
                               ),
+                              if (chartPoints != null && chartPoints.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                Divider(color: Theme.of(context).colorScheme.outlineVariant),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Economy Trend (${settings.economyUnit.label})',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Theme.of(context).colorScheme.outline,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                _buildTrendChart(context, chartPoints, settings),
+                              ],
                             ],
                           ),
                       ],
@@ -308,6 +325,105 @@ class DashboardTab extends ConsumerWidget {
           Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
           Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTrendChart(BuildContext context, List<FuelChartPoint> points, SettingsState settings) {
+    return SizedBox(
+      height: 180,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 16.0, top: 12.0),
+        child: LineChart(
+          LineChartData(
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: false,
+              getDrawingHorizontalLine: (value) {
+                return FlLine(
+                  color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5),
+                  strokeWidth: 1,
+                  dashArray: [5, 5],
+                );
+              },
+            ),
+            titlesData: FlTitlesData(
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  getTitlesWidget: (value, meta) {
+                    final index = value.toInt();
+                    if (index >= 0 && index < points.length && (index % (points.length > 5 ? (points.length / 4).round() : 1) == 0)) {
+                      final date = points[index].date;
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          '${date.month}/${date.day}',
+                          style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.outline),
+                        ),
+                      );
+                    }
+                    return const SizedBox();
+                  },
+                  reservedSize: 22,
+                ),
+              ),
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 36,
+                  getTitlesWidget: (value, meta) {
+                    return Text(
+                      value.toStringAsFixed(0),
+                      style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.outline),
+                    );
+                  },
+                ),
+              ),
+              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            ),
+            borderData: FlBorderData(
+              show: true,
+              border: Border(
+                bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+                left: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+              ),
+            ),
+            lineBarsData: [
+              LineChartBarData(
+                spots: points.map((p) => FlSpot(p.x, p.y)).toList(),
+                isCurved: true,
+                barWidth: 3,
+                color: Theme.of(context).colorScheme.primary,
+                belowBarData: BarAreaData(
+                  show: true,
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                ),
+                dotData: const FlDotData(show: true),
+              ),
+            ],
+            lineTouchData: LineTouchData(
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipColor: (touchedSpot) => Theme.of(context).colorScheme.secondaryContainer,
+                getTooltipItems: (touchedSpots) {
+                  return touchedSpots.map((spot) {
+                    final point = points[spot.spotIndex];
+                    final dateStr = '${point.date.year}-${point.date.month.toString().padLeft(2, '0')}-${point.date.day.toString().padLeft(2, '0')}';
+                    return LineTooltipItem(
+                      '${point.y.toStringAsFixed(1)} ${settings.economyUnit.label}\n$dateStr\n@ ${UnitConverter.convertDistance(point.mileage.toDouble(), settings.distanceUnit).round()} ${settings.distanceUnit.label}',
+                      TextStyle(
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    );
+                  }).toList();
+                },
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

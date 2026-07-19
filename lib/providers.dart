@@ -4,6 +4,7 @@ import 'database/repository.dart';
 import 'services/fuel_calculator.dart';
 import 'services/maintenance_reminder.dart';
 import 'services/settings_service.dart';
+import 'services/unit_converter.dart';
 
 /// Provider for the single database instance.
 final databaseProvider = Provider<AppDatabase>((ref) {
@@ -175,4 +176,52 @@ final fuelStatsProvider = Provider.family<FuelStats?, int>((ref, bikeId) {
     totalSpend: totalSpend,
     costPerMile: costPerMile,
   );
+});
+
+/// Represents a single point in the fuel economy trend chart.
+class FuelChartPoint {
+  final double x; // Sequential index
+  final double y; // Converted economy value
+  final DateTime date;
+  final int mileage;
+
+  FuelChartPoint({
+    required this.x,
+    required this.y,
+    required this.date,
+    required this.mileage,
+  });
+}
+
+/// Computes chronological fuel economy trend data points for a specific bike.
+final fuelChartPointsProvider = Provider.family<List<FuelChartPoint>?, int>((ref, bikeId) {
+  final logsAsync = ref.watch(fuelLogsProvider(bikeId));
+  final settings = ref.watch(settingsProvider);
+
+  if (logsAsync.isLoading) return null;
+
+  final logs = logsAsync.value ?? [];
+  if (logs.length < 2) return [];
+
+  // Reverse list to process chronologically (oldest first)
+  final chronologicalLogs = logs.reversed.toList();
+  final List<FuelChartPoint> points = [];
+
+  double xIndex = 0;
+  for (final log in chronologicalLogs) {
+    // calculateEconomy expects descending list (newest first) which is what logs is
+    final economy = FuelCalculator.calculateEconomy(log, logs);
+    if (economy != null && economy > 0) {
+      final convertedEconomy = UnitConverter.convertEconomy(economy, settings.economyUnit);
+      points.add(FuelChartPoint(
+        x: xIndex,
+        y: convertedEconomy,
+        date: log.date,
+        mileage: log.mileage,
+      ));
+      xIndex += 1.0;
+    }
+  }
+
+  return points;
 });

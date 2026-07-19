@@ -62,6 +62,12 @@ final fuelLogsProvider = StreamProvider.family<List<FuelLog>, int>((ref, bikeId)
   return repo.watchFuelLogs(bikeId);
 });
 
+/// Stream provider for parts of a specific bike.
+final partsProvider = StreamProvider.family<List<Part>, int>((ref, bikeId) {
+  final repo = ref.watch(repositoryProvider);
+  return repo.watchParts(bikeId);
+});
+
 // ============================================================================
 // Computed Providers for Dashboard Stats
 // ============================================================================

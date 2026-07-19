@@ -166,6 +166,62 @@ void main() {
     expect(find.textContaining('Never recorded'), findsNWidgets(3)); // 3 other tasks still untouched
 
     // ============================================================================
+    // 6.6. Test Parts Tab (Add Part with Auto-Maint Log)
+    // ============================================================================
+    // Tap on the Parts tab in bottom navigation
+    await tester.tap(find.text('Parts'));
+    await tester.pumpAndSettle();
+
+    // Verify empty state
+    expect(find.text('No parts tracked yet. Add your first upgrade!'), findsOneWidget);
+
+    // Tap FAB to add Part
+    await tester.tap(find.byKey(const ValueKey('add_part_button')));
+    await tester.pumpAndSettle();
+
+    // Fill form: Name "Yoshimura Exhaust", Status "Installed", Mileage 1400
+    await tester.enterText(find.bySemanticsLabel(RegExp('Part Name')), 'Yoshimura Exhaust');
+    
+    // Select 'Installed' from dropdown
+    await tester.tap(find.text('In-progress')); // Open dropdown (default value)
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Installed').last); // Select 'Installed' from dropdown list
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.bySemanticsLabel(RegExp('Installation Odometer')), '1400');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    // Verify part is listed as Installed @ 1400 mi
+    expect(find.text('Yoshimura Exhaust'), findsOneWidget);
+    expect(find.text('Installed'), findsOneWidget);
+    expect(find.textContaining('Installed @ 1400 mi'), findsOneWidget);
+
+    // Navigate to Logs tab to verify the auto-created maintenance entry
+    await tester.tap(find.text('Logs'));
+    await tester.pumpAndSettle();
+    
+    // LogsTab preserves its state (IndexedStack), so it will be on 'Fuel Logs' tab from earlier.
+    // Switch to 'Maintenance' sub-tab to verify.
+    await tester.tap(find.text('Maintenance'));
+    await tester.pumpAndSettle();
+    await tester.idle();
+    await tester.pump();
+
+    // Verify the auto-logged maintenance entry is present
+    expect(find.text('Installed: Yoshimura Exhaust'), findsOneWidget);
+    expect(find.textContaining('Mileage: 1400 mi'), findsOneWidget);
+
+    // Go back to Dashboard tab
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    await tester.idle();
+    await tester.pump();
+
+    // Verify Odometer updated to 1400 mi (max of logs, updated from the auto-logged maintenance log @ 1400 mi)
+    expect(find.text('1400 mi'), findsOneWidget);
+
+    // ============================================================================
     // 7. Revert state: Tap 'Switch Bike' to go back to Garage
     // ============================================================================
     await tester.tap(find.byIcon(Icons.swap_horizontal_circle_outlined));

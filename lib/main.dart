@@ -4,7 +4,14 @@ import 'providers.dart';
 import 'ui/garage_screen.dart';
 import 'ui/home_screen.dart';
 
-void main() {
+import 'services/notification_service.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize notifications
+  await NotificationService.init();
+
   runApp(
     const ProviderScope(
       child: MyApp(),

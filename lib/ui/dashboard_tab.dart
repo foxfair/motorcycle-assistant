@@ -103,27 +103,56 @@ class DashboardTab extends ConsumerWidget {
                             ),
                           )
                         else
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          Column(
                             children: [
-                              _buildStatItem(
-                                context,
-                                'Average Economy',
-                                fuelStats.averageEconomy != null
-                                    ? '${fuelStats.averageEconomy!.toStringAsFixed(1)} MPG'
-                                    : '--',
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  _buildStatItem(
+                                    context,
+                                    'Average Economy',
+                                    fuelStats.averageEconomy != null
+                                        ? '${fuelStats.averageEconomy!.toStringAsFixed(1)} MPG'
+                                        : '--',
+                                  ),
+                                  Container(
+                                    width: 1,
+                                    height: 40,
+                                    color: Theme.of(context).colorScheme.outlineVariant,
+                                  ),
+                                  _buildStatItem(
+                                    context,
+                                    'Latest Economy',
+                                    fuelStats.latestEconomy != null
+                                        ? '${fuelStats.latestEconomy!.toStringAsFixed(1)} MPG'
+                                        : '--',
+                                  ),
+                                ],
                               ),
-                              Container(
-                                width: 1,
-                                height: 40,
-                                color: Theme.of(context).colorScheme.outlineVariant,
-                              ),
-                              _buildStatItem(
-                                context,
-                                'Latest Economy',
-                                fuelStats.latestEconomy != null
-                                    ? '${fuelStats.latestEconomy!.toStringAsFixed(1)} MPG'
-                                    : '--',
+                              const SizedBox(height: 12),
+                              Divider(color: Theme.of(context).colorScheme.outlineVariant),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  _buildStatItem(
+                                    context,
+                                    'Total Fuel Spend',
+                                    '\$${fuelStats.totalSpend.toStringAsFixed(2)}',
+                                  ),
+                                  Container(
+                                    width: 1,
+                                    height: 40,
+                                    color: Theme.of(context).colorScheme.outlineVariant,
+                                  ),
+                                  _buildStatItem(
+                                    context,
+                                    'Cost per Mile',
+                                    fuelStats.costPerMile != null
+                                        ? '\$${fuelStats.costPerMile!.toStringAsFixed(3)}/mi'
+                                        : '--',
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -153,6 +182,8 @@ class DashboardTab extends ConsumerWidget {
                       return _buildReminderTile(context, reminder);
                     },
                   ),
+                const SizedBox(height: 24),
+                _buildVehicleInfoCard(context),
               ],
             ),
           ),
@@ -212,6 +243,65 @@ class DashboardTab extends ConsumerWidget {
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(reminder.reason),
+      ),
+    );
+  }
+
+  Widget _buildVehicleInfoCard(BuildContext context) {
+    final hasVin = motorcycle.vin != null && motorcycle.vin!.trim().isNotEmpty;
+    final hasNotes = motorcycle.notes != null && motorcycle.notes!.trim().isNotEmpty;
+
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Vehicle Information',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildInfoRow(context, 'Nickname', motorcycle.nickname),
+            _buildInfoRow(context, 'Make', motorcycle.make ?? '--'),
+            _buildInfoRow(context, 'Model', motorcycle.model ?? '--'),
+            _buildInfoRow(context, 'Year', motorcycle.year?.toString() ?? '--'),
+            if (hasVin) _buildInfoRow(context, 'VIN', motorcycle.vin!),
+            if (hasNotes) ...[
+              const Divider(height: 16),
+              Text(
+                'Notes',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                motorcycle.notes!,
+                style: const TextStyle(fontSize: 14),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(BuildContext context, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        ],
       ),
     );
   }

@@ -95,10 +95,18 @@ final remindersProvider = Provider.family<List<MaintenanceReminder>?, int>((ref,
 class FuelStats {
   final double? latestEconomy;
   final double? averageEconomy;
-  FuelStats({this.latestEconomy, this.averageEconomy});
+  final double totalSpend;
+  final double? costPerMile;
+
+  FuelStats({
+    this.latestEconomy,
+    this.averageEconomy,
+    this.totalSpend = 0.0,
+    this.costPerMile,
+  });
 }
 
-/// Provider to calculate fuel stats (latest and average economy) for a specific bike.
+/// Provider to calculate fuel stats (latest/average economy, spend, cost per mile) for a specific bike.
 /// Returns null if fuel logs are still loading.
 final fuelStatsProvider = Provider.family<FuelStats?, int>((ref, bikeId) {
   final logsAsync = ref.watch(fuelLogsProvider(bikeId));
@@ -112,11 +120,25 @@ final fuelStatsProvider = Provider.family<FuelStats?, int>((ref, bikeId) {
     return FuelStats();
   }
 
-  // 1. Calculate latest economy
+  // 1. Calculate total spend and average price paid
+  double totalSpend = 0.0;
+  double totalFuelForPrice = 0.0;
+  double totalSpendForPrice = 0.0;
+
+  for (final log in logs) {
+    if (log.pricePerUnit != null) {
+      final spend = log.amount * log.pricePerUnit!;
+      totalSpend += spend;
+      totalFuelForPrice += log.amount;
+      totalSpendForPrice += spend;
+    }
+  }
+
+  // 2. Calculate latest economy
   final latestLog = logs.first; // sorted descending (newest first)
   final latestEconomy = FuelCalculator.calculateEconomy(latestLog, logs);
 
-  // 2. Calculate average economy over all history
+  // 3. Calculate average economy over all history
   double? averageEconomy;
   final fullFills = logs.where((log) => log.fullTank).toList();
   if (fullFills.length >= 2) {
@@ -137,8 +159,17 @@ final fuelStatsProvider = Provider.family<FuelStats?, int>((ref, bikeId) {
     }
   }
 
+  // 4. Calculate cost per mile
+  double? costPerMile;
+  if (averageEconomy != null && averageEconomy > 0 && totalFuelForPrice > 0) {
+    final averagePricePerUnit = totalSpendForPrice / totalFuelForPrice;
+    costPerMile = averagePricePerUnit / averageEconomy;
+  }
+
   return FuelStats(
     latestEconomy: latestEconomy,
     averageEconomy: averageEconomy,
+    totalSpend: totalSpend,
+    costPerMile: costPerMile,
   );
 });

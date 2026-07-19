@@ -7,6 +7,7 @@ import 'package:sqlite3/open.dart';
 import 'package:motorcycle_assistant/main.dart';
 import 'package:motorcycle_assistant/providers.dart';
 import 'package:motorcycle_assistant/database/database.dart';
+import 'package:motorcycle_assistant/services/notification_service.dart';
 
 void main() {
   // Override for Linux to use the versioned sqlite3 library in tests
@@ -18,6 +19,7 @@ void main() {
 
   setUp(() {
     database = AppDatabase.connect(NativeDatabase.memory());
+    NotificationService.isTest = true;
   });
 
   testWidgets('Full Garage to Dashboard navigation smoke test', (WidgetTester tester) async {
@@ -57,6 +59,8 @@ void main() {
     await tester.enterText(find.bySemanticsLabel(RegExp('Make')), 'Honda');
     await tester.enterText(find.bySemanticsLabel(RegExp('Model')), 'Africa Twin');
     await tester.enterText(find.bySemanticsLabel(RegExp('Year')), '2021');
+    await tester.enterText(find.bySemanticsLabel(RegExp('VIN')), 'JH4SD08123456');
+    await tester.enterText(find.bySemanticsLabel(RegExp('Notes')), 'My overland travel companion');
 
     // Tap 'Add' button
     await tester.tap(find.text('Add'));
@@ -78,13 +82,18 @@ void main() {
     }
 
     // 6. Verify we are on the Home Screen Dashboard
-    expect(find.text('Red Beast'), findsOneWidget); // AppBar title
+    expect(find.text('Red Beast'), findsNWidgets(2)); // AppBar title + Vehicle Info card
     expect(find.text('2021 Honda Africa Twin'), findsOneWidget); // AppBar subtitle
 
     // Verify dashboard displays initial/empty stats
     expect(find.text('0 mi'), findsOneWidget); // Initial mileage
     expect(find.textContaining('No fuel logs recorded yet'), findsOneWidget);
     expect(find.textContaining('Never recorded'), findsAtLeastNWidgets(2)); // Default tasks status (Oil, Chain, etc.)
+
+    // Verify Vehicle Information card is displayed
+    expect(find.text('Vehicle Information'), findsOneWidget);
+    expect(find.text('JH4SD08123456'), findsOneWidget);
+    expect(find.text('My overland travel companion'), findsOneWidget);
 
     // ============================================================================
     // 6.5. Test Logs Tab (Maintenance & Fuel Logging)
@@ -123,11 +132,13 @@ void main() {
 
     await tester.enterText(find.bySemanticsLabel(RegExp('Odometer')), '1000');
     await tester.enterText(find.bySemanticsLabel(RegExp('Amount')), '3.0');
+    await tester.enterText(find.bySemanticsLabel(RegExp('Price')), '4.00');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
     // Verify first fuel log is listed (no economy calculated yet)
     expect(find.text('3.00 gal'), findsOneWidget);
+    expect(find.textContaining('Price: \$4.00/gal'), findsOneWidget);
     expect(find.textContaining('Odometer: 1000 mi'), findsOneWidget);
     expect(find.text('50.0 MPG'), findsNothing); // No economy yet
 
@@ -137,6 +148,7 @@ void main() {
 
     await tester.enterText(find.bySemanticsLabel(RegExp('Odometer')), '1300');
     await tester.enterText(find.bySemanticsLabel(RegExp('Amount')), '6.0');
+    await tester.enterText(find.bySemanticsLabel(RegExp('Price')), '5.00');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -146,6 +158,7 @@ void main() {
 
     // Verify second fuel log is listed with calculated MPG (300 miles / 6 gallons = 50.0 MPG)
     expect(find.text('6.00 gal'), findsOneWidget);
+    expect(find.textContaining('Price: \$5.00/gal'), findsOneWidget);
     expect(find.textContaining('Odometer: 1300 mi'), findsOneWidget);
     expect(find.text('50.0 MPG'), findsOneWidget);
 
@@ -160,6 +173,8 @@ void main() {
 
     // Verify Fuel stats updated to 50.0 MPG (Average and Latest are both 50.0)
     expect(find.text('50.0 MPG'), findsNWidgets(2));
+    expect(find.text('\$42.00'), findsOneWidget);
+    expect(find.text('\$0.093/mi'), findsOneWidget);
 
     // Verify Oil Change reminder is updated to "Due at 5000 mi" (1000 last done + 4000 interval)
     expect(find.textContaining('Due at 5000 mi'), findsOneWidget);
@@ -220,6 +235,39 @@ void main() {
 
     // Verify Odometer updated to 1400 mi (max of logs, updated from the auto-logged maintenance log @ 1400 mi)
     expect(find.text('1400 mi'), findsOneWidget);
+
+    // ============================================================================
+    // 6.7. Trigger notification: Log Fuel @ 4600 mi to make Oil Change 'dueSoon'
+    // ============================================================================
+    // Tap on Logs tab
+    await tester.tap(find.text('Logs'));
+    await tester.pumpAndSettle();
+
+    // Switch to Fuel Logs sub-tab
+    await tester.tap(find.text('Fuel Logs'));
+    await tester.pumpAndSettle();
+
+    // Tap FAB to add Fuel Log (@ 4700 mi, 5 gallons)
+    await tester.tap(find.byKey(const ValueKey('add_fuel_button')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.bySemanticsLabel(RegExp('Odometer')), '4700');
+    await tester.enterText(find.bySemanticsLabel(RegExp('Amount')), '5.0');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    // Wait for database updates to propagate and trigger reminders update
+    await tester.idle();
+    await tester.pump();
+
+    // Go back to Dashboard to verify Odometer is 4700 mi and Oil Change is 'dueSoon'
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    await tester.idle();
+    await tester.pump();
+
+    expect(find.text('4700 mi'), findsOneWidget);
+    expect(find.textContaining('Due in 300 mi'), findsOneWidget); // Oil Change should be due soon
 
     // ============================================================================
     // 7. Revert state: Tap 'Switch Bike' to go back to Garage

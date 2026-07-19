@@ -7,6 +7,7 @@ import '../services/maintenance_reminder.dart';
 import 'dashboard_tab.dart';
 import 'logs_tab.dart';
 import 'parts_tab.dart';
+import 'settings_dialog.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final Motorcycle motorcycle;
@@ -77,6 +78,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
+            onPressed: () => _showSettingsDialog(context),
+          ),
+          IconButton(
             icon: const Icon(Icons.swap_horizontal_circle_outlined),
             tooltip: 'Switch Bike',
             onPressed: () {
@@ -112,6 +118,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showSettingsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const SettingsDialog(),
     );
   }
 }

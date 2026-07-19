@@ -8,6 +8,8 @@ import 'package:motorcycle_assistant/main.dart';
 import 'package:motorcycle_assistant/providers.dart';
 import 'package:motorcycle_assistant/database/database.dart';
 import 'package:motorcycle_assistant/services/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:motorcycle_assistant/services/settings_service.dart';
 
 void main() {
   // Override for Linux to use the versioned sqlite3 library in tests
@@ -23,6 +25,9 @@ void main() {
   });
 
   testWidgets('Full Garage to Dashboard navigation smoke test', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+
     // Build our app and trigger a frame, overriding the database to be in-memory
     await tester.pumpWidget(
       ProviderScope(
@@ -31,6 +36,7 @@ void main() {
             ref.onDispose(() => database.close());
             return database;
           }),
+          sharedPreferencesProvider.overrideWithValue(prefs),
         ],
         child: const MyApp(),
       ),
@@ -268,6 +274,116 @@ void main() {
 
     expect(find.text('4700 mi'), findsOneWidget);
     expect(find.textContaining('Due in 300 mi'), findsOneWidget); // Oil Change should be due soon
+
+    // ============================================================================
+    // 6.8. Test App Settings and Unit Conversions
+    // ============================================================================
+    // Tap Settings button in AppBar
+    await tester.tap(find.byIcon(Icons.settings));
+    await tester.pumpAndSettle();
+
+    // Verify Settings dialog is shown
+    expect(find.text('App Settings'), findsOneWidget);
+
+    // Change Distance Unit to Kilometers (second option)
+    await tester.tap(find.text('Miles (mi)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kilometers (km)').last);
+    await tester.pumpAndSettle();
+
+    // Change Fuel Unit to Liters (second option)
+    await tester.tap(find.text('Gallons (gal)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Liters (L)').last);
+    await tester.pumpAndSettle();
+
+    // Change Economy Unit to km/L (second option)
+    await tester.tap(find.text('Miles per Gallon (MPG)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kilometers per Liter (km/L)').last);
+    await tester.pumpAndSettle();
+
+    // Tap Close button
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    // Verify Dashboard displays converted units:
+    // Odometer: 4700 mi * 1.60934 = 7564 km (rounded)
+    expect(find.text('7564 km'), findsOneWidget);
+
+    // Average: 336.36 MPG * 0.425144 = 143.0 km/L
+    // Latest: 680.0 MPG * 0.425144 = 289.1 km/L
+    expect(find.text('143.0 km/L'), findsOneWidget);
+    expect(find.text('289.1 km/L'), findsOneWidget);
+
+    // Cost per Mile: $0.01387/mi -> Cost per Km: $0.01387 / 1.60934 = $0.009/km (approx)
+    expect(find.text('\$0.009/km'), findsOneWidget);
+    expect(find.text('Cost per Km'), findsOneWidget);
+
+    // Verify Maintenance Reminder shows converted due status:
+    // "Due in 300 mi" * 1.60934 = 483 km (rounded)
+    expect(find.textContaining('Due in 483 km'), findsOneWidget);
+
+    // ============================================================================
+    // 6.9. Test Logging with Metric Inputs
+    // ============================================================================
+    // Tap on Logs tab
+    await tester.tap(find.text('Logs'));
+    await tester.pumpAndSettle();
+
+    // Switch to Maintenance sub-tab
+    await tester.tap(find.text('Maintenance'));
+    await tester.pumpAndSettle();
+
+    // Verify logs show converted displays:
+    // Odometer in Maintenance log: 1000 mi * 1.60934 = 1609 km
+    expect(find.textContaining('Mileage: 1609 km'), findsOneWidget);
+
+    // Switch to Fuel Logs sub-tab
+    await tester.tap(find.text('Fuel Logs'));
+    await tester.pumpAndSettle();
+
+    // Verify fuel logs show converted:
+    // Log 1: 3.00 gal * 3.78541 = 11.36 L
+    expect(find.text('11.36 L'), findsOneWidget);
+    // Price: $4.00/gal -> $4.00 / 3.78541 = $1.06/L
+    expect(find.textContaining('Price: \$1.06/L'), findsOneWidget);
+
+    // Tap FAB to add new Fuel Log in Metric:
+    // Current Odometer is 4700 mi (which is 7564 km). We log next fill at 7800 km.
+    // Amount: 15.0 L (which is 3.962 gal)
+    // Price: $1.20/L (which is $4.542/gal)
+    await tester.tap(find.byKey(const ValueKey('add_fuel_button')));
+    await tester.pumpAndSettle();
+
+    // Verify labels in dialog are updated:
+    expect(find.text('Odometer (km) *'), findsOneWidget);
+    expect(find.text('Amount (L) *'), findsOneWidget);
+    expect(find.text('Price per L (\$, optional)'), findsOneWidget);
+
+    await tester.enterText(find.bySemanticsLabel(RegExp('Odometer')), '7800');
+    await tester.enterText(find.bySemanticsLabel(RegExp('Amount')), '15.0');
+    await tester.enterText(find.bySemanticsLabel(RegExp('Price')), '1.20');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    await tester.idle();
+    await tester.pump();
+
+    // Verify the new log is listed in metric:
+    expect(find.text('15.00 L'), findsOneWidget);
+    expect(find.textContaining('Price: \$1.20/L'), findsOneWidget);
+    expect(find.textContaining('Odometer: 7800 km'), findsOneWidget);
+    expect(find.textContaining('Total: \$18.00'), findsOneWidget);
+
+    // Go back to Dashboard
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    await tester.idle();
+    await tester.pump();
+
+    // Verify Odometer is 7800 km (max of logs)
+    expect(find.text('7800 km'), findsOneWidget);
 
     // ============================================================================
     // 7. Revert state: Tap 'Switch Bike' to go back to Garage

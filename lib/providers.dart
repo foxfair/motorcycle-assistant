@@ -3,6 +3,7 @@ import 'database/database.dart';
 import 'database/repository.dart';
 import 'services/fuel_calculator.dart';
 import 'services/maintenance_reminder.dart';
+import 'services/settings_service.dart';
 
 /// Provider for the single database instance.
 final databaseProvider = Provider<AppDatabase>((ref) {
@@ -77,6 +78,7 @@ final partsProvider = StreamProvider.family<List<Part>, int>((ref, bikeId) {
 final remindersProvider = Provider.family<List<MaintenanceReminder>?, int>((ref, bikeId) {
   final mileageAsync = ref.watch(latestMileageProvider(bikeId));
   final logsAsync = ref.watch(maintenanceLogsProvider(bikeId));
+  final settings = ref.watch(settingsProvider);
 
   if (mileageAsync.isLoading || logsAsync.isLoading) {
     return null;
@@ -88,6 +90,7 @@ final remindersProvider = Provider.family<List<MaintenanceReminder>?, int>((ref,
   return MaintenanceReminderService.getReminders(
     currentMileage: mileage,
     logs: logs,
+    distanceUnit: settings.distanceUnit,
   );
 });
 

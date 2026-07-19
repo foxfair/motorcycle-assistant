@@ -1,4 +1,6 @@
 import '../database/database.dart';
+import 'settings_service.dart';
+import 'unit_converter.dart';
 
 enum MaintenanceStatus {
   clean,   // Maintenance is not needed soon
@@ -69,6 +71,7 @@ class MaintenanceReminderService {
     required List<MaintenanceLog> logs,
     List<MaintenanceTaskConfig> configs = defaultConfigs,
     DateTime? now,
+    DistanceUnit distanceUnit = DistanceUnit.miles,
   }) {
     final referenceDate = now ?? DateTime.now();
     final List<MaintenanceReminder> reminders = [];
@@ -114,14 +117,17 @@ class MaintenanceReminderService {
       List<String> dueSoonReasons = [];
 
       if (nextDueMileage != null) {
-        final remainingMileage = nextDueMileage - currentMileage;
-        if (remainingMileage <= 0) {
+        final remainingMileageInMiles = nextDueMileage - currentMileage;
+        final convertedRemaining = UnitConverter.convertDistance(remainingMileageInMiles.toDouble(), distanceUnit).round();
+        final unitLabel = distanceUnit.label;
+
+        if (remainingMileageInMiles <= 0) {
           status = MaintenanceStatus.overdue;
-          overdueReasons.add('Overdue by ${remainingMileage.abs()} mi');
-        } else if (config.mileageInterval != null && remainingMileage < (config.mileageInterval! * 0.1)) {
+          overdueReasons.add('Overdue by ${convertedRemaining.abs()} $unitLabel');
+        } else if (config.mileageInterval != null && remainingMileageInMiles < (config.mileageInterval! * 0.1)) {
           // Due soon if within 10% of interval
           status = MaintenanceStatus.dueSoon;
-          dueSoonReasons.add('Due in $remainingMileage mi');
+          dueSoonReasons.add('Due in $convertedRemaining $unitLabel');
         }
       }
 
@@ -148,7 +154,8 @@ class MaintenanceReminderService {
       } else if (nextDueMileage != null || nextDueRawDate != null) {
         final List<String> cleanParts = [];
         if (nextDueMileage != null) {
-          cleanParts.add('Due at $nextDueMileage mi');
+          final convertedNextDue = UnitConverter.convertDistance(nextDueMileage.toDouble(), distanceUnit).round();
+          cleanParts.add('Due at $convertedNextDue ${distanceUnit.label}');
         }
         if (nextDueRawDate != null) {
           final dateStr = '${nextDueRawDate.year}-${nextDueRawDate.month.toString().padLeft(2, '0')}-${nextDueRawDate.day.toString().padLeft(2, '0')}';

@@ -4,6 +4,8 @@ import 'package:drift/drift.dart' hide Column, isNotNull;
 import '../database/database.dart';
 import '../providers.dart';
 import '../services/fuel_calculator.dart';
+import '../services/settings_service.dart';
+import '../services/unit_converter.dart';
 
 class LogsTab extends ConsumerStatefulWidget {
   final Motorcycle motorcycle;
@@ -95,6 +97,7 @@ class _MaintenanceLogsList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final logsAsync = ref.watch(maintenanceLogsProvider(motorcycle.id));
+    final settings = ref.watch(settingsProvider);
 
     return logsAsync.when(
       data: (logs) {
@@ -118,7 +121,7 @@ class _MaintenanceLogsList extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 4),
-                    Text('Date: $dateStr  |  Mileage: ${log.mileage} mi'),
+                    Text('Date: $dateStr  |  Mileage: ${UnitConverter.convertDistance(log.mileage.toDouble(), settings.distanceUnit).round()} ${settings.distanceUnit.label}'),
                     if (log.notes != null && log.notes!.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text('Notes: ${log.notes}', style: const TextStyle(fontStyle: FontStyle.italic)),
@@ -128,7 +131,7 @@ class _MaintenanceLogsList extends ConsumerWidget {
                       Text(
                         'Next Service: ' +
                             [
-                              if (log.nextMaintenanceMileage != null) '${log.nextMaintenanceMileage} mi',
+                              if (log.nextMaintenanceMileage != null) '${UnitConverter.convertDistance(log.nextMaintenanceMileage!.toDouble(), settings.distanceUnit).round()} ${settings.distanceUnit.label}',
                               if (log.nextMaintenanceDate != null)
                                 '${log.nextMaintenanceDate!.year}-${log.nextMaintenanceDate!.month.toString().padLeft(2, '0')}-${log.nextMaintenanceDate!.day.toString().padLeft(2, '0')}',
                             ].join(' / '),
@@ -182,6 +185,7 @@ class _FuelLogsList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final logsAsync = ref.watch(fuelLogsProvider(motorcycle.id));
+    final settings = ref.watch(settingsProvider);
 
     return logsAsync.when(
       data: (logs) {
@@ -217,10 +221,10 @@ class _FuelLogsList extends ConsumerWidget {
                 title: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('${log.amount.toStringAsFixed(2)} gal', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text('${UnitConverter.convertVolume(log.amount, settings.fuelUnit).toStringAsFixed(2)} ${settings.fuelUnit.label}', style: const TextStyle(fontWeight: FontWeight.bold)),
                     if (economy != null)
                       Text(
-                        '${economy.toStringAsFixed(1)} MPG',
+                        '${UnitConverter.convertEconomy(economy, settings.economyUnit).toStringAsFixed(1)} ${settings.economyUnit.label}',
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.primary,
                           fontWeight: FontWeight.bold,
@@ -232,9 +236,9 @@ class _FuelLogsList extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 4),
-                    Text('Date: $dateStr  |  Odometer: ${log.mileage} mi'),
+                    Text('Date: $dateStr  |  Odometer: ${UnitConverter.convertDistance(log.mileage.toDouble(), settings.distanceUnit).round()} ${settings.distanceUnit.label}'),
                     if (log.pricePerUnit != null)
-                      Text('Price: \$${log.pricePerUnit!.toStringAsFixed(2)}/gal  |  Total: \$${(log.pricePerUnit! * log.amount).toStringAsFixed(2)}'),
+                      Text('Price: \$${UnitConverter.convertPrice(log.pricePerUnit!, settings.fuelUnit).toStringAsFixed(2)}/${settings.fuelUnit.label}  |  Total: \$${(log.pricePerUnit! * log.amount).toStringAsFixed(2)}'),
                   ],
                 ),
                 trailing: IconButton(
@@ -320,6 +324,7 @@ class _AddMaintDialogState extends ConsumerState<AddMaintDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(settingsProvider);
     final dateStr = '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
     final overrideDateStr = _overrideDate == null
         ? 'Select Date'
@@ -366,7 +371,7 @@ class _AddMaintDialogState extends ConsumerState<AddMaintDialog> {
               // Mileage
               TextFormField(
                 controller: _mileageController,
-                decoration: const InputDecoration(labelText: 'Odometer (mi) *'),
+                decoration: InputDecoration(labelText: 'Odometer (${settings.distanceUnit.label}) *'),
                 keyboardType: TextInputType.number,
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -410,7 +415,7 @@ class _AddMaintDialogState extends ConsumerState<AddMaintDialog> {
                 children: [
                   TextFormField(
                     controller: _overrideMileageController,
-                    decoration: const InputDecoration(labelText: 'Next Due Odometer (mi)'),
+                    decoration: InputDecoration(labelText: 'Next Due Odometer (${settings.distanceUnit.label})'),
                     keyboardType: TextInputType.number,
                     validator: (value) {
                       if (_showOverrides && value != null && value.isNotEmpty) {
@@ -444,8 +449,15 @@ class _AddMaintDialogState extends ConsumerState<AddMaintDialog> {
           onPressed: () async {
             if (_formKey.currentState!.validate()) {
               final taskName = _showCustomTaskField ? _customTaskController.text.trim() : _selectedTask;
-              final mileage = int.parse(_mileageController.text);
-              final overrideMileage = int.tryParse(_overrideMileageController.text);
+              
+              final mileageInput = int.parse(_mileageController.text);
+              final mileage = UnitConverter.convertDistanceBack(mileageInput.toDouble(), settings.distanceUnit).round();
+              
+              int? overrideMileage;
+              if (_overrideMileageController.text.isNotEmpty) {
+                final overrideInput = int.parse(_overrideMileageController.text);
+                overrideMileage = UnitConverter.convertDistanceBack(overrideInput.toDouble(), settings.distanceUnit).round();
+              }
 
               final companion = MaintenanceLogsCompanion(
                 motorcycleId: Value(widget.motorcycle.id),
@@ -528,6 +540,7 @@ class _AddFuelDialogState extends ConsumerState<AddFuelDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(settingsProvider);
     final dateStr = '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
 
     return AlertDialog(
@@ -541,7 +554,7 @@ class _AddFuelDialogState extends ConsumerState<AddFuelDialog> {
               // Mileage
               TextFormField(
                 controller: _mileageController,
-                decoration: const InputDecoration(labelText: 'Odometer (mi) *'),
+                decoration: InputDecoration(labelText: 'Odometer (${settings.distanceUnit.label}) *'),
                 keyboardType: TextInputType.number,
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -557,7 +570,7 @@ class _AddFuelDialogState extends ConsumerState<AddFuelDialog> {
               // Fuel Amount
               TextFormField(
                 controller: _amountController,
-                decoration: const InputDecoration(labelText: 'Amount (gallons) *'),
+                decoration: InputDecoration(labelText: 'Amount (${settings.fuelUnit.label}) *'),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -573,7 +586,7 @@ class _AddFuelDialogState extends ConsumerState<AddFuelDialog> {
               // Price per Unit
               TextFormField(
                 controller: _priceController,
-                decoration: const InputDecoration(labelText: 'Price per gallon (\$, optional)'),
+                decoration: InputDecoration(labelText: 'Price per ${settings.fuelUnit.label} (\$, optional)'),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   if (value != null && value.isNotEmpty) {
@@ -617,9 +630,17 @@ class _AddFuelDialogState extends ConsumerState<AddFuelDialog> {
         TextButton(
           onPressed: () async {
             if (_formKey.currentState!.validate()) {
-              final mileage = int.parse(_mileageController.text);
-              final amount = double.parse(_amountController.text);
-              final price = double.tryParse(_priceController.text);
+              final mileageInput = int.parse(_mileageController.text);
+              final mileage = UnitConverter.convertDistanceBack(mileageInput.toDouble(), settings.distanceUnit).round();
+              
+              final amountInput = double.parse(_amountController.text);
+              final amount = UnitConverter.convertVolumeBack(amountInput, settings.fuelUnit);
+              
+              double? price;
+              if (_priceController.text.isNotEmpty) {
+                final priceInput = double.parse(_priceController.text);
+                price = UnitConverter.convertPriceBack(priceInput, settings.fuelUnit);
+              }
 
               final companion = FuelLogsCompanion(
                 motorcycleId: Value(widget.motorcycle.id),

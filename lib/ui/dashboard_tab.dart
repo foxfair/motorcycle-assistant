@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/database.dart';
 import '../providers.dart';
 import '../services/maintenance_reminder.dart';
+import '../services/settings_service.dart';
+import '../services/unit_converter.dart';
 
 class DashboardTab extends ConsumerWidget {
   final Motorcycle motorcycle;
@@ -13,6 +15,7 @@ class DashboardTab extends ConsumerWidget {
     final mileageAsync = ref.watch(latestMileageProvider(motorcycle.id));
     final fuelStats = ref.watch(fuelStatsProvider(motorcycle.id));
     final reminders = ref.watch(remindersProvider(motorcycle.id));
+    final settings = ref.watch(settingsProvider);
 
     return Scaffold(
       body: RefreshIndicator(
@@ -48,13 +51,16 @@ class DashboardTab extends ConsumerWidget {
                             ),
                             const SizedBox(height: 4),
                             mileageAsync.when(
-                              data: (mileage) => Text(
-                                '$mileage mi',
-                                style: const TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                              data: (mileage) {
+                                final converted = UnitConverter.convertDistance(mileage.toDouble(), settings.distanceUnit).round();
+                                return Text(
+                                  '$converted ${settings.distanceUnit.label}',
+                                  style: const TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                );
+                              },
                               loading: () => const SizedBox(
                                 height: 32,
                                 width: 32,
@@ -112,7 +118,7 @@ class DashboardTab extends ConsumerWidget {
                                     context,
                                     'Average Economy',
                                     fuelStats.averageEconomy != null
-                                        ? '${fuelStats.averageEconomy!.toStringAsFixed(1)} MPG'
+                                        ? '${UnitConverter.convertEconomy(fuelStats.averageEconomy!, settings.economyUnit).toStringAsFixed(1)} ${settings.economyUnit.label}'
                                         : '--',
                                   ),
                                   Container(
@@ -124,7 +130,7 @@ class DashboardTab extends ConsumerWidget {
                                     context,
                                     'Latest Economy',
                                     fuelStats.latestEconomy != null
-                                        ? '${fuelStats.latestEconomy!.toStringAsFixed(1)} MPG'
+                                        ? '${UnitConverter.convertEconomy(fuelStats.latestEconomy!, settings.economyUnit).toStringAsFixed(1)} ${settings.economyUnit.label}'
                                         : '--',
                                   ),
                                 ],
@@ -147,9 +153,9 @@ class DashboardTab extends ConsumerWidget {
                                   ),
                                   _buildStatItem(
                                     context,
-                                    'Cost per Mile',
+                                    settings.distanceUnit == DistanceUnit.miles ? 'Cost per Mile' : 'Cost per Km',
                                     fuelStats.costPerMile != null
-                                        ? '\$${fuelStats.costPerMile!.toStringAsFixed(3)}/mi'
+                                        ? '\$${UnitConverter.convertCostPerDistance(fuelStats.costPerMile!, settings.distanceUnit).toStringAsFixed(3)}/${settings.distanceUnit.label}'
                                         : '--',
                                   ),
                                 ],

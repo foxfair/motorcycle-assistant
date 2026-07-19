@@ -115,4 +115,22 @@ class GarageRepository {
   Future<int> deletePart(int id) {
     return (_db.delete(_db.parts)..where((t) => t.id.equals(id))).go();
   }
+
+  // ==========================================
+  // 5. Utility / Calculations
+  // ==========================================
+
+  /// Watches the latest mileage for a specific motorcycle dynamically.
+  /// It queries the max mileage from both maintenance and fuel logs.
+  Stream<int> watchLatestMileage(int motorcycleId) {
+    return _db.customSelect(
+      'SELECT MAX(max_mileage) as latest_mileage FROM ('
+      '  SELECT MAX(mileage) as max_mileage FROM maintenance_logs WHERE motorcycle_id = ?'
+      '  UNION ALL'
+      '  SELECT MAX(mileage) as max_mileage FROM fuel_logs WHERE motorcycle_id = ?'
+      ')',
+      variables: [Variable.withInt(motorcycleId), Variable.withInt(motorcycleId)],
+      readsFrom: {_db.maintenanceLogs, _db.fuelLogs},
+    ).map((row) => row.read<int?>('latest_mileage') ?? 0).watchSingle();
+  }
 }

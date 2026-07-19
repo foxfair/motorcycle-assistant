@@ -198,4 +198,43 @@ void main() {
       expect(parts, isEmpty);
     });
   });
+
+  group('Utility/Calculation Tests', () {
+    test('watchLatestMileage returns correct max mileage', () async {
+      final bikeId = await repository.addMotorcycle(
+        const MotorcyclesCompanion(nickname: Value('Test Bike')),
+      );
+
+      // Initial mileage should be 0 (no logs)
+      var mileage = await repository.watchLatestMileage(bikeId).first;
+      expect(mileage, equals(0));
+
+      // Add maintenance log @ 1000 mi
+      await repository.addMaintenanceLog(
+        MaintenanceLogsCompanion(
+          motorcycleId: Value(bikeId),
+          date: Value(DateTime.now()),
+          mileage: const Value(1000),
+          task: const Value('Oil Change'),
+        ),
+      );
+
+      mileage = await repository.watchLatestMileage(bikeId).first;
+      expect(mileage, equals(1000));
+
+      // Add fuel log @ 1500 mi (higher)
+      await repository.addFuelLog(
+        FuelLogsCompanion(
+          motorcycleId: Value(bikeId),
+          date: Value(DateTime.now()),
+          mileage: const Value(1500),
+          amount: const Value(4.0),
+          fullTank: const Value(true),
+        ),
+      );
+
+      mileage = await repository.watchLatestMileage(bikeId).first;
+      expect(mileage, equals(1500));
+    });
+  });
 }
